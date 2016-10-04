@@ -67,4 +67,22 @@ object Ambiguity
 		case Star(_,_)    => List(ListU(List()))
 	}
 
+	// Injection to obtain r's parse trees from the parse tree of the derivative.
+	def injDs(r:RE, pd:RE, l:Char, u:U):List[U] = (r,pd,u) match {
+		case (Star(r), Seq(rd,_), Pair(u,ListU(us))) => for 
+		{
+			u1 <- injDs(r,rd,l,u)
+		} yield ListU(u1:us)
+		case (Seq(r1,r2),Choice(Seq(rd1,_),_),LeftU(u)) => 
+		{
+			val Pair(up,upp) = u 
+			for { us1 <- injDs(r1,rd1,l,up) } yield pair(us1,upp)
+		}
+		case (Seq(r1,r2),Seq(rd1,_),Pair(up,upp)) => for 
+		{
+			us <- injDs(r1,rd1,l,up)
+		} yield Pair(us,up)
+
+	}
+
 }
