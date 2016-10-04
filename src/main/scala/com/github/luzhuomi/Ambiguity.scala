@@ -64,25 +64,50 @@ object Ambiguity
 			u1s ++ u2s
 		}
 		case Seq(r1,r2) => for {u1 <- mkEmptyUs(r1); u2 <- mkEmptyUs(r2)} yield Pair(u1,u2)
-		case Star(_,_)    => List(ListU(List()))
+		case Star(_,_)  => List(ListU(List()))
 	}
 
 	// Injection to obtain r's parse trees from the parse tree of the derivative.
-	def injDs(r:RE, pd:RE, l:Char, u:U):List[U] = (r,pd,u) match {
-		case (Star(r), Seq(rd,_), Pair(u,ListU(us))) => for 
+	// Note that the derivatives (d) can be only in shapes of (r,r), r+r, or Epsilon,
+	//   hence the parse tree u can only be in shapes of Pair, LeftU, RightU or EmptyU
+	def injDs(r:RE, d:RE, l:Char, u:U):List[U] = (r,d,u) match {
+		case (Star(r,gf), Seq(rd,_), Pair(u,ListU(us))) => for 
 		{
 			u1 <- injDs(r,rd,l,u)
-		} yield ListU(u1:us)
-		case (Seq(r1,r2),Choice(Seq(rd1,_),_),LeftU(u)) => 
+		} yield ListU(u1::us)
+		case (Seq(r1,r2),Choice(Seq(rd1,_),_,gf),LeftU(u)) => 
 		{
 			val Pair(up,upp) = u 
-			for { us1 <- injDs(r1,rd1,l,up) } yield pair(us1,upp)
+			for { us1 <- injDs(r1,rd1,l,up) } yield Pair(us1,upp)
 		}
+		case (Seq(r1,r2),Choice(_,rd2,gf),RightU(u)) => for
+		{
+			us1 <- mkEmptyUs(r1);
+			us2 <- injDs(r2,rd2,l,u)
+		} yield Pair(us1,us2)
 		case (Seq(r1,r2),Seq(rd1,_),Pair(up,upp)) => for 
 		{
 			us <- injDs(r1,rd1,l,up)
 		} yield Pair(us,up)
-
+		case (Choice(r1,r2,_), Choice(rd1,rd2,_), LeftU(u)) => for 
+		{
+			us <- injDs(r1,rd1,l,u) 
+		} yield LeftU(us)
+		case (Choice(r1,r2,_), Choice(rd1,rd2,_), RightU(u)) => for 
+		{
+			us <- injDs(r2,rd2,l,u) 
+		} yield RightU(us)
+		case (L(c), Empty, EmptyU) if (c == l) => List(Letter(l)) 
+		case (L(c), Empty, EmptyU) => error("impossible")
 	}
 
+	// Compute alphabet of a regular expression
+	def sigma(r:RE):List[Char] = r match {
+		case Phi => List()
+		case Empty => List()
+		case L(c) => List(c)
+		case Seq(r1,r2) => (sigma(r1)++sigma(r2)).toSet.toList
+		case Choice(r1,r2,_) => (sigma(r1)++sigma(r2)).toSet.toList
+		case Star(r,_) => sigma(r)
+	}
 }
