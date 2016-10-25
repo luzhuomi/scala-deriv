@@ -27,7 +27,7 @@ resolvers += "luzhuomi github repo" at "https://raw.githubusercontent.com/luzhuo
 
 libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.2.4" // scala license
 
-libraryDependencies += "com.github.luzhuomi" %% "scalapderiv" % "0.0.7"  // apache license
+libraryDependencies += "com.github.luzhuomi" %% "scalapderiv" % "0.0.8"  // apache license
 
 seq(assemblySettings: _*)
 
