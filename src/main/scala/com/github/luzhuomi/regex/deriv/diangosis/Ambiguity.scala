@@ -1,3 +1,4 @@
+package com.github.luzhuomi.regex.deriv.diagnosis
 import com.github.luzhuomi.regex.Common._
 import com.github.luzhuomi.regex.RE._
 import com.github.luzhuomi.regex.IntPattern._
