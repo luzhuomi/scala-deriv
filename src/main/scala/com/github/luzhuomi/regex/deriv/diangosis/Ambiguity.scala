@@ -317,8 +317,119 @@ object Ambiguity
 
 	def nubChoiceWith(r:RE, idx:Int, m:Map[RE,List[Int]]):(RE, U=>List[U], Map[RE,List[Int]], Int, Boolean) = r match 
 	{
+		case Choice(r1::rs, gf) => m.get(r1) match 
+		{
+			case Some(idxs) => 
+        	// r1 \in M    M |- r2...rN --> r2'...rM'
+        	// -----------------------------
+        	// M |- r1 + r2...rN --> r2'...rM'
+        	{
+        		val mp = m.updated(r1, idxs++List(idx))
+        		val (Choice(rsp,_), g, mpp, idxp, b) = nubChoiceWith(Choice(rs,gf),idx+1, mp)
+        		def f(u:U) : List[U] = for { v <- g(unRight(u)) } yield right(v) 
+        		(Choice(rsp,gf), f, mpp, idxp, !isPhi(r1)) // not isPhi is required, if r1 is Phi does not implies it is ambiguous
+        	}
+        	case None => 
+        	// r1 \not \in M   M U {r1} |- r2...rN --> r2'...rM'
+        	// ---------------------------------------
+        	// M |- r1 + r2 --> r1 + r2'...rM'
+        	{
+        		val mp = m.+(r1 -> List(idx))
+        		val (Choice(rsp,_),g,mpp,idxp,b) = nubChoiceWith(Choice(rs,gf),idx+1,mp)
+        		val idxs = mpp.get(r1) match 
+        		{
+        			case None => Nil
+        			case Some(idxsp) => idxsp
+        		}
+        		def f(u:U):List[U] = u match 
+        		{
+        			case AltU(0,v) => idxs.map(i => mkCons(i-idx,v))
+        			case AltU(n,v) => for { w <- g(unRight(u)) } yield right(w)
+        		}
+        		(Choice(r1::rsp,gf),f,mpp,idxp,b)
+        	}
+
+		}
+		case (Choice(Nil,gf)) => (Choice(Nil,gf), (u:U)=>List(u), m, idx, false)
 		case r => (r,(u:U) => List(u), m, idx, false) // todo: check why this is needed
 	}
+
+	def mkCons(n:Int,u:U):U = if (n <= 0) { AltU(0,u) } else { AltU(n,u) }
+
+	// build a finite state trans
+	case class FSX( start: RE
+		, finals: List[RE]
+		, states: List[RE]
+		, transitions: List[(RE,Char,RE,U=>List[U])]
+		, ambig1 : List[RE]
+		, ambig2 : List[(RE,Char,RE)]
+		, ambig3 : List[(RE,Char,RE)]
+		)
+
+	def buildFSX(r:RE):FSX = 
+	{
+		val sig = sigma(r)
+
+		def mkTransitions(r:RE,l:Char) : List[(RE, Char, RE, U=>List[U])] = 
+		{
+			val d = deriv(r,l)
+			val (rpp,fSimp, _) = simp3(d)
+			if (isPhi(rpp)) { List() }
+			else {
+				List((r,l,rpp, (u:U)=> {
+					fSimp(u).flatMap(up => injDs(r,d,l,up)).toSet.toList
+					} 
+				))				
+			}
+		}
+
+		def go(rs:List[RE],fsx:FSX, curr_rs:List[RE]) : FSX = 
+		{
+			val new_ts = (for { r <- curr_rs 
+						 	  ; l <- sig 
+							  } yield (l,r)).flatMap( (lr:(Char,RE))=> mkTransitions(lr._2,lr._1) )
+
+			val new_rs = (for { (_,_,r,_) <- new_ts
+							  ; if !isPhi(r) && !rs.contains(r)} yield r).toSet.toList
+
+			val new_ambig1 = rs.filter( r => testAmbigCase1(r))
+
+			val new_ambig2 = ( for { r <- rs 
+								   ; l <- sig
+								   ; val (rd,bd) = deriv2(r,l)
+								   ; val (rs,fs,bs) = simp3 (rd) } yield  ((r,l,rs), bd)
+							 ).filter( x=> x._2 && !(isPhi(x._1._3))).map(_._1)
+
+			val new_ambig3 = ( for { r <- rs 
+								   ; l <- sig
+								   ; val (rd,bd) = deriv2(r,l)
+								   ; val (rs,fs,bs) = simp3 (rd) } yield  ((r,l,rs), bs)
+							 ).filter( x=> x._2 && !(isPhi(x._1._3))).map(_._1)
+
+			val new_fsx = fsx match 
+			{
+				case FSX(start,finals,states,transitions,ambig1,ambig2,ambig3) => 
+				{
+					FSX(start,finals ++ new_rs.filter(nullable), states ++ new_rs,
+						transitions ++ new_ts, (ambig1 ++ new_ambig1).toSet.toList,
+						(ambig2 ++ new_ambig2).toSet.toList, (ambig3 ++ new_ambig3).toSet.toList)
+				}
+
+			}
+			if (new_rs.length == 0) 
+			{
+				new_fsx
+			} else {
+				go (rs ++ new_rs, new_fsx, new_rs)
+			}
+		}
+
+		val fsx = FSX(r, (if (nullable(r)) { List(r) } else List()), List(r), List(), List(), List(), List() )
+		go(List(r),fsx,List(r))
+	}
+
+
+
 
 	// Compute alphabet of a regular expression
 	def sigma(r:RE):List[Char] = r match {
