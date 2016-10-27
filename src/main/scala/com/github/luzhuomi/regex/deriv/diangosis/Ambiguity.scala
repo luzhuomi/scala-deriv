@@ -137,7 +137,7 @@ object Ambiguity
 					{
 						(for { up <- g(u)
 							 ; upp <- f(up)
-							 } yield upp).toSet.toList
+							 } yield upp).distinct
 					}, 
 					b || b2)
 			}
@@ -178,7 +178,7 @@ object Ambiguity
 	{
 		case Seq(Eps, t) => simpStep(t) match 
 		{
-			case (rp, f, b) => (rp, (u:U) => (for { v <- f(u)} yield PairU(EmptyU,v)).toSet.toList, b)
+			case (rp, f, b) => (rp, (u:U) => (for { v <- f(u)} yield PairU(EmptyU,v)).distinct, b)
 		}
 		case Seq(Phi, t) => (Phi, error("undefined"), false)
 		case Choice(List(r),gf) => (r, (u:U) => List(AltU(0,u)), false)
@@ -377,7 +377,7 @@ object Ambiguity
 			if (isPhi(rpp)) { List() }
 			else {
 				List((r,l,rpp, (u:U)=> {
-					fSimp(u).flatMap(up => injDs(r,d,l,up)).toSet.toList
+					fSimp(u).flatMap(up => injDs(r,d,l,up)).distinct
 					} 
 				))				
 			}
@@ -390,7 +390,7 @@ object Ambiguity
 							  } yield (l,r)).flatMap( (lr:(Char,RE))=> mkTransitions(lr._2,lr._1) )
 
 			val new_rs = (for { (_,_,r,_) <- new_ts
-							  ; if !isPhi(r) && !rs.contains(r)} yield r).toSet.toList
+							  ; if !isPhi(r) && !rs.contains(r)} yield r).distinct
 
 			val new_ambig1 = rs.filter( r => testAmbigCase1(r))
 
@@ -411,8 +411,8 @@ object Ambiguity
 				case FSX(start,finals,states,transitions,ambig1,ambig2,ambig3) => 
 				{
 					FSX(start,finals ++ new_rs.filter(nullable), states ++ new_rs,
-						transitions ++ new_ts, (ambig1 ++ new_ambig1).toSet.toList,
-						(ambig2 ++ new_ambig2).toSet.toList, (ambig3 ++ new_ambig3).toSet.toList)
+						transitions ++ new_ts, (ambig1 ++ new_ambig1).distinct,
+						(ambig2 ++ new_ambig2).distinct, (ambig3 ++ new_ambig3).distinct)
 				}
 
 			}
@@ -428,8 +428,112 @@ object Ambiguity
 		go(List(r),fsx,List(r))
 	}
 
+	sealed trait AmbigTrans 
+	case class A1(s:RE, l:Char, t:RE, f:U=>List[U], prefix:List[(RE,Char,U=>List[U])]) extends AmbigTrans
+	case class A2(s:RE, l:Char, t:RE, f:U=>List[U], prefix:List[(RE,Char,U=>List[U])]) extends AmbigTrans
+	case class A3(s:RE, l:Char, t:RE, f:U=>List[U], prefix:List[(RE,Char,U=>List[U])]) extends AmbigTrans
+
+	
 
 
+	def findMincounterEx(fsx:FSX):List[U] = 
+	{
+		val FSX(start, finals, states, transitions, ambig1, ambig2, ambig3) = fsx
+		def findNextTrans(r:RE): List[(RE, Char, RE, U=> List[U])] = transitions.filter (_._1 == r)
+		def nub123[A,B,C,D,E](l:List[(A,B,C,D,E)]):List[(A,B,C,D,E)] = nubBy(l,(x:(A,B,C,D,E))=>(x._1,x._2,x._3))
+
+		def goUntilAmbig(curr_states_prefices:List[(RE,List[(RE,Char,U=>List[U])])], trans_sofar:List[(RE, Char, RE)]):Option[AmbigTrans] = 
+		{
+			val next_trans_prefices = nub123(curr_states_prefices.flatMap( r_prefix => 
+			{
+				val r = r_prefix._1
+				val prefix = r_prefix._2
+				findNextTrans(r).map((sltf:(RE, Char, RE, U=> List[U]))=>(sltf._1,sltf._2,sltf._3,sltf._4,prefix))
+			})).filter (sltfp => !trans_sofar.contains((sltfp._1,sltfp._2,sltfp._3)))
+			val ambigs1 = next_trans_prefices.filter(sltfp => ambig1.contains(sltfp._1))
+			val ambigs2 = next_trans_prefices.filter(sltfp => ambig2.contains((sltfp._1,sltfp._2,sltfp._3)))
+			val ambigs3 = next_trans_prefices.filter(sltfp => ambig3.contains((sltfp._1,sltfp._2,sltfp._3)))
+			if (next_trans_prefices.nonEmpty)
+			{
+				(ambigs1,ambigs2,ambigs3) match 
+				{
+					case ((trans::_),_,_)     => Some(A1(trans._1,trans._2,trans._3,trans._4,trans._5))
+					case (Nil,(trans::_),_)   => Some(A2(trans._1,trans._2,trans._3,trans._4,trans._5))
+					case (Nil,Nil,(trans::_)) => Some(A3(trans._1,trans._2,trans._3,trans._4,trans._5))
+					case (Nil,Nil,Nil)        => 
+					{ // no ambiguity found so far
+						val next_stats_prefices = next_trans_prefices.map(rltfp => 
+						{
+							val (r,l,t,f,p) = rltfp
+							(t,(r,l,f)::p)	 
+						})
+						val next_trans_sofar = trans_sofar ++ next_trans_prefices.map(rltfp => 
+						{
+							val (r,l,t,f,p) = rltfp
+							(r,l,t)
+						})
+						goUntilAmbig(next_stats_prefices,next_trans_sofar)
+					}
+				}
+			} else {
+				None
+			}
+		}
+		goUntilAmbig(List((start,List())),List()) match 
+		{
+			case None => List()
+			case Some(A1(r,l,t,f,pf)) => 
+			{
+				val ut     = genV(t)
+				val urs    = f(ut)
+				val (s,us) = pf.foldLeft((r,urs))((tus, rlf) =>
+				{
+					val (t,us) = tus
+					val (r,l,f) = rlf
+					(r, us.flatMap(u=>f(u)))
+				})
+				us
+			}
+			case Some(A2(r,l,t,f,pf)) => 
+			{
+				val ut     = genV(t)
+				val urs    = f(ut)
+				val (s,us) = pf.foldLeft((r,urs))((tus, rlf) =>
+				{
+					val (t,us) = tus
+					val (r,l,f) = rlf
+					(r, us.flatMap(u=>f(u)))
+				})
+				us
+			}
+			case Some(A3(r,l,t,f,pf)) => 
+			{
+				val ut     = genV(t)
+				val urs    = f(ut)
+				val (s,us) = pf.foldLeft((r,urs))((tus, rlf) =>
+				{
+					val (t,us) = tus
+					val (r,l,f) = rlf
+					(r, us.flatMap(u=>f(u)))
+				})
+				us
+			}
+		}
+	}
+
+	
+	// generate a minimal parse tree given a RE
+	def genV(r:RE):U = r match 
+	{
+		case Eps  => EmptyU
+		case L(c) => LetterU(c)
+		case Any  => LetterU('a')
+		case Not(cs)    => LetterU((0 to 255).toList.map(_.toChar).filter((c:Char)=>(!(cs.contains(c)))).head) // todo: what if cs is all the 256 chars?
+		case Seq(r1,r2) => PairU(genV(r1),genV(r2))
+		case Choice(Nil,_) => error("genV is applied ot an empty choice")
+		case Choice(rs,_) => AltU(0,genV(rs.head)) // todo: what if rs is empty
+		case Star(r,_) => ListU(List())
+	}
 
 	// Compute alphabet of a regular expression
 	def sigma(r:RE):List[Char] = r match {
@@ -438,8 +542,8 @@ object Ambiguity
 		case L(c) => List(c)
 		case Any  => List()
 		case Not(cs) => List()
-		case Seq(r1,r2) => (sigma(r1)++sigma(r2)).toSet.toList
-		case Choice(rs,_) => rs.flatMap(sigma(_)).toSet.toList
+		case Seq(r1,r2) => (sigma(r1)++sigma(r2)).distinct
+		case Choice(rs,_) => rs.flatMap(sigma(_)).distinct
 		case Star(r,_) => sigma(r)
 	}
 }
