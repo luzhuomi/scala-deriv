@@ -21,12 +21,26 @@ object RE {
 			case Phi           => false
 			case Eps           => true
 			case L(_)          => false
-			case Choice(rs,_)  => rs.exists(posEps(_))
+			case Choice(rs,_)  => rs.exists(posEps)
 			// case ChoiceInt(rs) => rs.exists(posEps(_))
 			case Seq(r1,r2)    => posEps(r1) && posEps(r2)
 			case Star(_,_)     => true
 			case Any           => false
 			case Not(_)        => false
+		}
+	}
+
+	implicit def reIsPhi = new IsPhi[RE] {
+		def isPhi(r:RE):Boolean = r match 
+		{
+			case Phi           => true
+			case Eps           => false
+			case L(_)          => false
+			case Choice(rs,_)  => rs.forall(isPhi)
+			case Seq(r1,r2)    => isPhi(r1) || isPhi(r2)
+			case Star(_,_)     => false
+			case Any           => false
+			case Not(_)        => false			
 		}
 	}
 
