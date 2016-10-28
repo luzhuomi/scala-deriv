@@ -181,7 +181,7 @@ object Ambiguity
 		{
 			case (rp, f, b) => (rp, (u:U) => (for { v <- f(u)} yield PairU(EmptyU,v)).distinct, b)
 		}
-		case Seq(Phi, t) => (Phi, error("undefined"), false)
+		case Seq(Phi, t) => (Phi, u => error("undefined"), false)
 		case Choice(List(r),gf) => (r, (u:U) => List(AltU(0,u)), false)
 		case Choice(rs, gf) => 
 		{
@@ -548,7 +548,7 @@ object Ambiguity
 		case Star(r,_) => sigma(r)
 	}
 
-	def diangoseU(regex:String):Either[String,List[U]] = parse(regex) match 
+	def diagnoseU(regex:String):Either[String,List[U]] = parse(regex) match 
 	{
 		case None    => Left("Parsing failed. The input is not a regex.")
 		case Some(r) => 
