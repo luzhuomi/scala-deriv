@@ -3,6 +3,7 @@ package com.github.luzhuomi.regex.deriv.diagnosis
 import scala.collection.Map._
 import com.github.luzhuomi.regex.deriv.RE._
 import com.github.luzhuomi.regex.deriv.Common._
+import com.github.luzhuomi.regex.deriv.Parse._
 
 object Ambiguity 
 {
@@ -545,5 +546,15 @@ object Ambiguity
 		case Seq(r1,r2) => (sigma(r1)++sigma(r2)).distinct
 		case Choice(rs,_) => rs.flatMap(sigma(_)).distinct
 		case Star(r,_) => sigma(r)
+	}
+
+	def diangoseU(regex:String):Either[String,List[U]] = parse(regex) match 
+	{
+		case None    => Left("Parsing failed. The input is not a regex.")
+		case Some(r) => 
+		{
+			val fsx = buildFSX(r)
+			Right(findMincounterEx(fsx))
+		}
 	}
 }
