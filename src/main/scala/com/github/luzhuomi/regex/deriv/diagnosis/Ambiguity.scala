@@ -17,6 +17,17 @@ object Ambiguity
 	case class PairU(u:U,v:U) extends U
 	case class ListU(us:List[U]) extends U
 
+	def flatU(u:U):String = u match 
+	{
+		case NilU => ""
+		case EmptyU => ""
+		case LetterU(c) => c.toString
+		case AltU(i,u)  => flatU(u)
+		case PairU(u1,u2) => flatU(u1)+flatU(u2)
+		case ListU(us) => us.map(flatU).foldLeft("")( (s,t) => s ++ t)
+	}
+
+
 	def nullable(r:RE)(implicit m:PosEps[RE]):Boolean = m.posEps(r)
 
 	def isPhi(r:RE)(implicit m:IsPhi[RE]):Boolean = m.isPhi(r)
@@ -102,7 +113,7 @@ object Ambiguity
 		case (Seq(r1,r2),Seq(rd1,_),PairU(up,upp)) => for 
 		{
 			us <- injDs(r1,rd1,l,up)
-		} yield PairU(us,up)
+		} yield PairU(us,upp)
 		case (Choice(r::rs,_), Choice(rd::rds,_), AltU(0,u)) => for 
 		{
 			us <- injDs(r,rd,l,u) 
@@ -189,7 +200,7 @@ object Ambiguity
 			val (rs1,fs1,bs1) = rfbs.unzip3
 			def f1(u:U):List[U] = u match 
 			{
-				case AltU(n,v) => for { u <- (fs1.drop(n).head)(v) } yield AltU(n,u)
+				case AltU(n,v) => for { up <- (fs1.drop(n).head)(v) } yield AltU(n,up)
 				case _         => List(u) 
 			}
 			val b1 = bs1.exists(x=>x)
@@ -234,7 +245,7 @@ object Ambiguity
 	def rmAltPhiN(n:Int,rs:List[RE]):List[(U=>U, RE)] = rs match 
 	{
 		case Nil => Nil
-		case (r::rsp) if isPhi(r) => rmAltPhiN(n-1,rsp)
+		case (r::rsp) if isPhi(r) => rmAltPhiN(n+1,rsp)
 		case (r::rsp)             => (((u:U) => u match { case AltU(m,v) => AltU(n+m,v)}, r)::rmAltPhiN(n,rsp))
 	}
 
@@ -557,4 +568,18 @@ object Ambiguity
 			Right(findMincounterEx(fsx))
 		}
 	}
+
+	def diagnose(regex:String):Either[String,List[String]] = diagnoseU(regex) match 
+	{
+		case Left(s) => Left(s)
+		case Right(us) => Right( us.map(flatU) )
+	}
+
+	val a = L('a')
+	def star(x:RE):RE = Star(x,Greedy)
+	val e1 = Seq(Eps, Seq(star(a),star(a)))
+
+	// running bigger expression requires incrase of JAVA heap memory, for sbt -mem 2048
+	// or edit /usr/local/etc/sbtopts
+
 }
