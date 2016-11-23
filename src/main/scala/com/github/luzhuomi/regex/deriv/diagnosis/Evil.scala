@@ -38,4 +38,8 @@ object Evil
     allRp.exists( ambig_loop_no_uni_desc(_))
   }
 
+  def diagnose(src:String):Either[String, Boolean] = parse(src) match {
+    case None => Left(s"Unable to parse regex '${src}'. Error: ")
+    case Some(pat) => Right(evil(ascii, pat))
+  }
 }
