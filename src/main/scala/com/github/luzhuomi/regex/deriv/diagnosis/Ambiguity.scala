@@ -448,7 +448,7 @@ object Ambiguity
 	
 
 
-	def findMincounterEx(fsx:FSX):List[U] = 
+	def findMinCounterEx(fsx:FSX):List[U] = 
 	{
 		val FSX(start, finals, states, transitions, ambig1, ambig2, ambig3) = fsx
 		def findNextTrans(r:RE): List[(RE, Char, RE, U=> List[U])] = transitions.filter (_._1 == r)
@@ -565,7 +565,7 @@ object Ambiguity
 		case Some(r) => 
 		{
 			val fsx = buildFSX(r)
-			Right(findMincounterEx(fsx))
+			Right(findMinCounterEx(fsx))
 		}
 	}
 
@@ -573,6 +573,11 @@ object Ambiguity
 	{
 		case Left(s) => Left(s)
 		case Right(us) => Right( us.map(flatU) )
+	}
+
+	def diagnoseRE(r:RE):List[U] = {
+	  val fsx = buildFSX(r)
+	  findMinCounterEx(fsx)
 	}
 
 	val a = L('a')

@@ -12,7 +12,7 @@ version := "0.0.1"
 
 scalaVersion := "2.11.8"
 
-crossScalaVersions := Seq("2.9.2", "2.10.3", "2.11.3")
+crossScalaVersions := Seq("2.10.3", "2.11.8")
 
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
 
