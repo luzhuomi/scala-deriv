@@ -406,6 +406,8 @@ object Ambiguity
 
 			val new_ambig1 = rs.filter( r => testAmbigCase1(r))
 
+			/*
+
 			val new_ambig2 = ( for { r <- rs 
 								   ; l <- sig
 								   ; val (rd,bd) = deriv2(r,l)
@@ -417,7 +419,16 @@ object Ambiguity
 								   ; val (rd,bd) = deriv2(r,l)
 								   ; val (rs,fs,bs) = simp3 (rd) } yield  ((r,l,rs), bs)
 							 ).filter( x=> x._2 && !(isPhi(x._1._3))).map(_._1)
-
+			*/
+			// optimized
+			val trans_flags = (for { r <- rs 
+								   ; l <- sig
+								   ; val (rd,bd) = deriv2(r,l)
+								   ; val (rs,fs,bs) = simp3 (rd) 
+								   } yield  ((r,l,rs), bd, bs)).filter(x => !(isPhi(x._1._3)))
+			val new_ambig2 = trans_flags.filter( x=> x._2 ).map(_._1)
+			val new_ambig3 = trans_flags.filter( x=> x._3 ).map(_._1)
+							 
 			val new_fsx = fsx match 
 			{
 				case FSX(start,finals,states,transitions,ambig1,ambig2,ambig3) => 
