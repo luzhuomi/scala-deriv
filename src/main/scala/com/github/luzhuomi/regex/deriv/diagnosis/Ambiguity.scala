@@ -591,6 +591,20 @@ object Ambiguity
 	  findMinCounterEx(fsx)
 	}
 
+	def isAmbiguous(regex:String):Either[String,Boolean] = parse(regex) match 
+	{
+		case None    => Left("Parsing failed. The input is not a regex.")
+		case Some(r) => 
+		{
+			buildFSX(r) match 
+			{ 
+				case FSX(start,finals,states,transitions,Nil,Nil,Nil) => Right(false)
+				case FSX(start,finals,states,transitions,ambig1,ambig2,ambig3) => Right(true)
+			}
+		}
+
+	}
+
 	val a = L('a')
 	def star(x:RE):RE = Star(x,Greedy)
 	val e1 = Seq(Eps, Seq(star(a),star(a)))
